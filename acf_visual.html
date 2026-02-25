@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ACF — Visualisation Interactive</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&family=Syne:wght@400;700;800&display=swap');
+
+  :root {
+    --bg: #0a0e1a;
+    --panel: #111827;
+    --border: #1e293b;
+    --accent: #38bdf8;
+    --green: #34d399;
+    --red: #f87171;
+    --yellow: #fbbf24;
+    --text: #e2e8f0;
+    --muted: #64748b;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Syne', sans-serif;
+    min-height: 100vh;
+    padding: 2rem;
+  }
+
+  h1 {
+    font-size: 2rem;
+    font-weight: 800;
+    letter-spacing: -0.03em;
+    margin-bottom: 0.25rem;
+    color: white;
+  }
+
+  .subtitle {
+    color: var(--muted);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    margin-bottom: 2rem;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 1.5rem;
+    max-width: 1100px;
+    margin: 0 auto;
+  }
+
+  .card {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 1.5rem;
+  }
+
+  .card.full { grid-column: 1 / -1; }
+
+  .card-title {
+    font-size: 0.7rem;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--muted);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 1rem;
+  }
+
+  /* Slider control */
+  .slider-row {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .slider-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    color: var(--muted);
+    white-space: nowrap;
+  }
+
+  input[type=range] {
+    flex: 1;
+    -webkit-appearance: none;
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    outline: none;
+  }
+
+  input[type=range]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: var(--accent);
+    cursor: pointer;
+    transition: transform 0.1s;
+  }
+
+  input[type=range]::-webkit-slider-thumb:hover { transform: scale(1.3); }
+
+  .acf-value {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 1.4rem;
+    font-weight: 700;
+    min-width: 60px;
+    text-align: right;
+    transition: color 0.3s;
+  }
+
+  /* Series canvas */
+  canvas {
+    width: 100%;
+    height: 140px;
+    display: block;
+    border-radius: 6px;
+  }
+
+  /* Interpretation badge */
+  .badge {
+    display: inline-block;
+    padding: 0.3rem 0.8rem;
+    border-radius: 99px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    font-weight: 700;
+    margin-top: 1rem;
+    transition: all 0.4s;
+  }
+
+  /* Lag scatter */
+  .scatter-wrap {
+    display: flex;
+    gap: 1rem;
+    align-items: flex-start;
+  }
+
+  .scatter-canvas {
+    width: 160px;
+    height: 160px;
+    flex-shrink: 0;
+  }
+
+  .interpretation {
+    flex: 1;
+    padding-top: 0.5rem;
+  }
+
+  .interp-title {
+    font-size: 1rem;
+    font-weight: 700;
+    margin-bottom: 0.5rem;
+    transition: color 0.3s;
+  }
+
+  .interp-text {
+    font-size: 0.82rem;
+    color: var(--muted);
+    line-height: 1.6;
+  }
+
+  .interp-text strong { color: var(--text); }
+
+  /* ACF bar chart */
+  .acf-bars {
+    display: flex;
+    align-items: flex-end;
+    gap: 4px;
+    height: 100px;
+    padding-top: 10px;
+    position: relative;
+  }
+
+  .acf-bar-wrap {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    height: 100%;
+    justify-content: flex-end;
+    position: relative;
+  }
+
+  .acf-bar {
+    width: 100%;
+    border-radius: 3px 3px 0 0;
+    transition: height 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.4s;
+    min-height: 2px;
+    position: relative;
+  }
+
+  .acf-bar-neg {
+    width: 100%;
+    border-radius: 0 0 3px 3px;
+    transition: height 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), background 0.4s;
+    min-height: 2px;
+  }
+
+  .bar-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.6rem;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+
+  .zero-line {
+    position: absolute;
+    left: 0; right: 0;
+    height: 1px;
+    background: var(--border);
+  }
+
+  .tabs {
+    display: flex;
+    gap: 0.5rem;
+    margin-bottom: 1.5rem;
+  }
+
+  .tab {
+    padding: 0.4rem 1rem;
+    border-radius: 6px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.75rem;
+    cursor: pointer;
+    border: 1px solid var(--border);
+    background: transparent;
+    color: var(--muted);
+    transition: all 0.2s;
+  }
+
+  .tab.active {
+    background: var(--accent);
+    color: var(--bg);
+    border-color: var(--accent);
+  }
+
+  header {
+    max-width: 1100px;
+    margin: 0 auto 2rem;
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Autocorrélation — Visualisation</h1>
+  <p class="subtitle">feat_acf · séries temporelles · FPP3</p>
+</header>
+
+<div class="grid">
+
+  <!-- Main interactive card -->
+  <div class="card full">
+    <div class="card-title">acf1 — Joue avec le coefficient</div>
+
+    <div class="slider-row">
+      <span class="slider-label">acf1 =</span>
+      <input type="range" id="acfSlider" min="-99" max="99" value="80" step="1">
+      <span class="acf-value" id="acfDisplay">0.80</span>
+    </div>
+
+    <div class="tabs">
+      <button class="tab active" onclick="setPreset(0.9, this)">Persistance forte</button>
+      <button class="tab" onclick="setPreset(0.0, this)">Bruit blanc</button>
+      <button class="tab" onclick="setPreset(-0.8, this)">Oscillation</button>
+      <button class="tab" onclick="setPreset(0.4, this)">Modéré</button>
+    </div>
+
+    <canvas id="seriesCanvas"></canvas>
+
+    <div class="scatter-wrap" style="margin-top:1.5rem">
+      <canvas class="scatter-canvas" id="scatterCanvas"></canvas>
+      <div class="interpretation">
+        <div class="interp-title" id="interpTitle">Forte persistance</div>
+        <div class="interp-text" id="interpText">
+          Chaque valeur est fortement liée à la précédente.<br><br>
+          <strong>Si ce trimestre est haut → le suivant sera probablement haut aussi.</strong><br><br>
+          Série "lisse", avec inertie. Attention : acf1 proche de 1 peut aussi signaler une non-stationnarité.
+        </div>
+        <span class="badge" id="interpBadge">🔵 Mémoire positive forte</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ACF bars -->
+  <div class="card">
+    <div class="card-title">Profil ACF complet (lags 1→10)</div>
+    <div class="acf-bars" id="acfBars">
+      <div class="zero-line" id="zeroLine"></div>
+    </div>
+    <div style="font-family:'JetBrains Mono',monospace;font-size:0.7rem;color:var(--muted);margin-top:0.5rem">
+      Plus les barres décroissent lentement → plus la mémoire est longue (acf10 élevé)
+    </div>
+  </div>
+
+  <!-- Season ACF -->
+  <div class="card">
+    <div class="card-title">season_acf1 — Mémoire saisonnière (lag 4)</div>
+    <canvas id="seasonCanvas" style="height:120px"></canvas>
+    <div style="margin-top:1rem">
+      <div class="slider-row">
+        <span class="slider-label">season_acf1 =</span>
+        <input type="range" id="seasonSlider" min="0" max="99" value="70" step="1">
+        <span class="acf-value" id="seasonDisplay" style="color:var(--green)">0.70</span>
+      </div>
+      <div class="interp-text" id="seasonInterp">
+        Forte saisonnalité : T1 ressemble à T1 de l'année précédente, T4 ressemble à T4, etc.
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// ---- Utilities ----
+function lerp(a, b, t) { return a + (b - a) * t; }
+
+function generateAR1(n, phi, seed=42) {
+  let rng = seed;
+  function rand() {
+    rng = (rng * 1664525 + 1013904223) & 0xffffffff;
+    return ((rng >>> 0) / 0xffffffff) * 2 - 1;
+  }
+  const series = [rand() * 2];
+  for (let i = 1; i < n; i++) {
+    series.push(phi * series[i-1] + Math.sqrt(1 - phi*phi) * rand() * 2);
+  }
+  return series;
+}
+
+function normalize(arr) {
+  const mn = Math.min(...arr), mx = Math.max(...arr);
+  return arr.map(v => (v - mn) / (mx - mn));
+}
+
+// ---- Series Canvas ----
+function drawSeries(canvas, series, color) {
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width = canvas.offsetWidth * window.devicePixelRatio;
+  const H = canvas.height = canvas.offsetHeight * window.devicePixelRatio;
+  ctx.clearRect(0, 0, W, H);
+
+  const norm = normalize(series);
+  const pad = 20;
+  const w = (W - 2*pad) / (norm.length - 1);
+
+  // grid lines
+  ctx.strokeStyle = '#1e293b';
+  ctx.lineWidth = 1;
+  for (let i = 0; i <= 4; i++) {
+    const y = pad + (H - 2*pad) * i / 4;
+    ctx.beginPath(); ctx.moveTo(pad, y); ctx.lineTo(W-pad, y); ctx.stroke();
+  }
+
+  // gradient fill
+  const grad = ctx.createLinearGradient(0, 0, 0, H);
+  grad.addColorStop(0, color + '40');
+  grad.addColorStop(1, color + '00');
+  ctx.beginPath();
+  ctx.moveTo(pad, H - pad - norm[0] * (H - 2*pad));
+  for (let i = 1; i < norm.length; i++) {
+    ctx.lineTo(pad + i*w, H - pad - norm[i] * (H - 2*pad));
+  }
+  ctx.lineTo(pad + (norm.length-1)*w, H-pad);
+  ctx.lineTo(pad, H-pad);
+  ctx.closePath();
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // line
+  ctx.beginPath();
+  ctx.moveTo(pad, H - pad - norm[0] * (H - 2*pad));
+  for (let i = 1; i < norm.length; i++) {
+    ctx.lineTo(pad + i*w, H - pad - norm[i] * (H - 2*pad));
+  }
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 2 * window.devicePixelRatio;
+  ctx.lineJoin = 'round';
+  ctx.stroke();
+}
+
+// ---- Scatter Canvas ----
+function drawScatter(canvas, series, color) {
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width = canvas.offsetWidth * window.devicePixelRatio;
+  const H = canvas.height = canvas.offsetHeight * window.devicePixelRatio;
+  ctx.clearRect(0, 0, W, H);
+
+  const pad = 20 * window.devicePixelRatio;
+  const mn = Math.min(...series), mx = Math.max(...series);
+  const scale = v => (v - mn) / (mx - mn);
+
+  // axes
+  ctx.strokeStyle = '#1e293b';
+  ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(pad, pad); ctx.lineTo(pad, H-pad); ctx.lineTo(W-pad, H-pad); ctx.stroke();
+
+  // axis labels
+  ctx.fillStyle = '#64748b';
+  ctx.font = `${9 * window.devicePixelRatio}px JetBrains Mono`;
+  ctx.fillText('t-1', pad + 2, H - 4);
+  ctx.fillText('t', W - pad - 10, H - pad - 4);
+
+  // dots
+  for (let i = 1; i < series.length; i++) {
+    const x = pad + scale(series[i-1]) * (W - 2*pad);
+    const y = H - pad - scale(series[i]) * (H - 2*pad);
+    ctx.beginPath();
+    ctx.arc(x, y, 3 * window.devicePixelRatio, 0, Math.PI*2);
+    ctx.fillStyle = color + 'aa';
+    ctx.fill();
+  }
+}
+
+// ---- ACF Bars ----
+function computeACF(series, maxLag) {
+  const n = series.length;
+  const mean = series.reduce((a,b) => a+b, 0) / n;
+  const variance = series.reduce((a,b) => a + (b-mean)**2, 0) / n;
+  const acfs = [];
+  for (let lag = 1; lag <= maxLag; lag++) {
+    let cov = 0;
+    for (let i = lag; i < n; i++) cov += (series[i] - mean) * (series[i-lag] - mean);
+    acfs.push(cov / (n * variance));
+  }
+  return acfs;
+}
+
+function drawACFBars(series) {
+  const container = document.getElementById('acfBars');
+  container.innerHTML = '<div class="zero-line" id="zeroLine"></div>';
+  const acfs = computeACF(series, 10);
+  const maxAbs = 1;
+  const totalH = 100;
+
+  acfs.forEach((v, i) => {
+    const wrap = document.createElement('div');
+    wrap.className = 'acf-bar-wrap';
+    wrap.style.justifyContent = 'center';
+
+    const posH = Math.max(0, v) / maxAbs * (totalH/2);
+    const negH = Math.max(0, -v) / maxAbs * (totalH/2);
+
+    const top = document.createElement('div');
+    top.className = 'acf-bar';
+    top.style.height = posH + 'px';
+    top.style.background = v > 0 ? '#38bdf8' : 'transparent';
+
+    const bot = document.createElement('div');
+    bot.className = 'acf-bar-neg';
+    bot.style.height = negH + 'px';
+    bot.style.background = v < 0 ? '#f87171' : 'transparent';
+
+    const lbl = document.createElement('div');
+    lbl.className = 'bar-label';
+    lbl.textContent = i + 1;
+
+    wrap.appendChild(top);
+    wrap.appendChild(bot);
+    wrap.appendChild(lbl);
+    container.appendChild(wrap);
+  });
+}
+
+// ---- Season canvas ----
+function drawSeasonSeries(phi) {
+  const canvas = document.getElementById('seasonCanvas');
+  const n = 20;
+  // Generate series with seasonal pattern
+  const series = [];
+  for (let i = 0; i < n; i++) {
+    const season = Math.sin(2 * Math.PI * i / 4) * 2;
+    const noise = (Math.random() - 0.5) * (1 - phi) * 4;
+    series.push(season * phi + noise);
+  }
+  drawSeries(canvas, series, '#34d399');
+}
+
+// ---- Interpretation ----
+function getInterpretation(phi) {
+  if (phi > 0.7) return {
+    title: 'Forte persistance',
+    text: 'Chaque valeur est fortement liée à la précédente.\n\n<strong>Si ce trimestre est haut → le suivant sera probablement haut aussi.</strong>\n\nSérie "lisse", avec inertie. Attention : peut signaler une non-stationnarité.',
+    badge: '🔵 Mémoire positive forte',
+    color: '#38bdf8'
+  };
+  if (phi > 0.3) return {
+    title: 'Persistance modérée',
+    text: 'Lien partiel entre valeurs consécutives.\n\n<strong>Le passé influence un peu le futur, mais sans être déterminant.</strong>\n\nSérie avec une légère inertie, souvent stationnaire.',
+    badge: '🟡 Mémoire modérée',
+    color: '#fbbf24'
+  };
+  if (phi > -0.3) return {
+    title: 'Bruit blanc (ou proche)',
+    text: 'Pas de lien entre valeurs consécutives.\n\n<strong>La valeur de ce trimestre ne dit rien sur le suivant.</strong>\n\nSérie totalement imprévisible à court terme. Typiquement stationnaire.',
+    badge: '⚪ Aucune mémoire',
+    color: '#94a3b8'
+  };
+  if (phi > -0.7) return {
+    title: 'Oscillation modérée',
+    text: 'Légère tendance à alterner.\n\n<strong>Après une valeur haute, tendance à descendre légèrement.</strong>',
+    badge: '🟠 Légère oscillation',
+    color: '#fb923c'
+  };
+  return {
+    title: 'Oscillation forte',
+    text: 'Alternance systématique entre valeurs hautes et basses.\n\n<strong>Haut → Bas → Haut → Bas...</strong>\n\nPattern très régulier, presque mécanique.',
+    badge: '🔴 Oscillation forte',
+    color: '#f87171'
+  };
+}
+
+// ---- Main update ----
+let currentSeries = [];
+
+function update() {
+  const phi = parseInt(document.getElementById('acfSlider').value) / 100;
+  document.getElementById('acfDisplay').textContent = phi.toFixed(2);
+
+  const interp = getInterpretation(phi);
+  document.getElementById('acfDisplay').style.color = interp.color;
+
+  currentSeries = generateAR1(60, phi);
+
+  drawSeries(document.getElementById('seriesCanvas'), currentSeries, interp.color);
+  drawScatter(document.getElementById('scatterCanvas'), currentSeries, interp.color);
+  drawACFBars(currentSeries);
+
+  document.getElementById('interpTitle').textContent = interp.title;
+  document.getElementById('interpTitle').style.color = interp.color;
+  document.getElementById('interpText').innerHTML = interp.text.replace(/\n/g, '<br>');
+  const badge = document.getElementById('interpBadge');
+  badge.textContent = interp.badge;
+  badge.style.background = interp.color + '22';
+  badge.style.color = interp.color;
+  badge.style.border = '1px solid ' + interp.color + '44';
+}
+
+function updateSeason() {
+  const phi = parseInt(document.getElementById('seasonSlider').value) / 100;
+  document.getElementById('seasonDisplay').textContent = phi.toFixed(2);
+  drawSeasonSeries(phi);
+
+  const text = phi > 0.6
+    ? 'Forte saisonnalité : T1 ressemble à T1 de l\'année précédente, T4 ressemble à T4, etc. Les patterns se répètent chaque année.'
+    : phi > 0.3
+    ? 'Saisonnalité modérée : le pattern annuel existe mais avec du bruit.'
+    : 'Pas de saisonnalité détectable : les mêmes trimestres d\'une année à l\'autre ne se ressemblent pas.';
+  document.getElementById('seasonInterp').textContent = text;
+}
+
+function setPreset(val, btn) {
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById('acfSlider').value = Math.round(val * 100);
+  update();
+}
+
+document.getElementById('acfSlider').addEventListener('input', update);
+document.getElementById('seasonSlider').addEventListener('input', updateSeason);
+
+window.addEventListener('resize', () => { update(); updateSeason(); });
+
+update();
+updateSeason();
+</script>
+</body>
+</html>
